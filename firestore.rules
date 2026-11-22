@@ -1,0 +1,570 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Hardened Primitives ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrapAdmin() {
+      return isVerified() && request.auth.token.email == 'wafaesey@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() || (
+        isVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isActiveUser() {
+      return isVerified() && (
+        isBootstrapAdmin() || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true
+        )
+      );
+    }
+
+    function isAssignedToPesantren(pesantrenId) {
+      return isActiveUser() &&
+        exists(/databases/$(database)/documents/pesantren/$(pesantrenId)) &&
+        request.auth.uid in get(/databases/$(database)/documents/pesantren/$(pesantrenId)).data.assignedOperatorUids;
+    }
+
+    function isSafeHttpUrl(val) {
+      return val is string && (val == '' || (val.size() <= 500 && val.matches('^https://.+')));
+    }
+
+    // --- Validation Blueprints ---
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'isActive', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'isActive', 'inviteId', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role in ['super_admin', 'operator'] &&
+        data.isActive is bool &&
+        (!('inviteId' in data) || isValidId(data.inviteId)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOperatorInvite(data) {
+      return data.keys().hasAll(['email', 'fullName', 'isActive', 'assignedPesantrenIds', 'createdByUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['email', 'fullName', 'phone', 'isActive', 'assignedPesantrenIds', 'linkedUid', 'createdByUid', 'createdAt', 'updatedAt']) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120 &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+        data.isActive is bool &&
+        data.assignedPesantrenIds is list && data.assignedPesantrenIds.size() <= 10 &&
+        (data.assignedPesantrenIds.size() == 0 || isValidId(data.assignedPesantrenIds[0])) &&
+        (!('linkedUid' in data) || (data.linkedUid is string && data.linkedUid.size() <= 128)) &&
+        isValidId(data.createdByUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOperatorAssignment(data) {
+      return data.keys().hasAll(['pesantrenId', 'pesantrenNama', 'operatorEmail', 'operatorName', 'status', 'assignedByUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['pesantrenId', 'pesantrenNama', 'operatorEmail', 'operatorUid', 'operatorName', 'status', 'assignedByUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.pesantrenId) &&
+        data.pesantrenNama is string && data.pesantrenNama.size() >= 1 && data.pesantrenNama.size() <= 160 &&
+        data.operatorEmail is string && data.operatorEmail.size() >= 3 && data.operatorEmail.size() <= 160 &&
+        (!('operatorUid' in data) || (data.operatorUid is string && data.operatorUid.size() <= 128)) &&
+        data.operatorName is string && data.operatorName.size() >= 1 && data.operatorName.size() <= 120 &&
+        data.status in ['aktif', 'nonaktif'] &&
+        isValidId(data.assignedByUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPesantren(data) {
+      return data.keys().hasAll([
+          'nama', 'alamat', 'kecamatan', 'desa', 'namaPimpinan', 'tahunBerdiri',
+          'tipe', 'statusKeaktifan', 'lat', 'lng', 'verificationStatus',
+          'assignedOperatorUids', 'assignedOperatorEmails', 'ijopStatusSummary',
+          'totalSantriLatest', 'totalPendidikLatest', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'nama', 'nspp', 'alamat', 'kecamatan', 'desa', 'telepon', 'email',
+          'namaPimpinan', 'tahunBerdiri', 'tipe', 'statusKeaktifan', 'lat', 'lng',
+          'verificationStatus', 'catatanRevisi', 'assignedOperatorUids',
+          'assignedOperatorEmails', 'ijopStatusSummary', 'ijopExpiredAt',
+          'totalSantriLatest', 'totalPendidikLatest', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.nama is string && data.nama.size() >= 3 && data.nama.size() <= 160 &&
+        (!('nspp' in data) || (data.nspp is string && data.nspp.size() <= 32)) &&
+        data.alamat is string && data.alamat.size() >= 5 && data.alamat.size() <= 300 &&
+        data.kecamatan is string && data.kecamatan.size() >= 2 && data.kecamatan.size() <= 80 &&
+        data.desa is string && data.desa.size() >= 2 && data.desa.size() <= 80 &&
+        (!('telepon' in data) || (data.telepon is string && data.telepon.size() <= 32)) &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 160)) &&
+        data.namaPimpinan is string && data.namaPimpinan.size() >= 2 && data.namaPimpinan.size() <= 120 &&
+        data.tahunBerdiri is number && data.tahunBerdiri >= 1800 && data.tahunBerdiri <= 2100 &&
+        data.tipe in ['Salafiyah', 'Khalafiyah/Modern', 'Kombinasi'] &&
+        data.statusKeaktifan in ['aktif', 'nonaktif'] &&
+        data.lat is number && data.lat >= -90 && data.lat <= 90 &&
+        data.lng is number && data.lng >= -180 && data.lng <= 180 &&
+        data.verificationStatus in ['draft', 'diajukan', 'diverifikasi', 'disetujui', 'ditolak'] &&
+        (!('catatanRevisi' in data) || (data.catatanRevisi is string && data.catatanRevisi.size() <= 1000)) &&
+        data.assignedOperatorUids is list && data.assignedOperatorUids.size() <= 10 &&
+        (data.assignedOperatorUids.size() == 0 || isValidId(data.assignedOperatorUids[0])) &&
+        data.assignedOperatorEmails is list && data.assignedOperatorEmails.size() <= 10 &&
+        (data.assignedOperatorEmails.size() == 0 || (data.assignedOperatorEmails[0] is string && data.assignedOperatorEmails[0].size() <= 160)) &&
+        data.ijopStatusSummary in ['aktif', 'segera_berakhir', 'kedaluwarsa', 'belum_ada'] &&
+        (!('ijopExpiredAt' in data) || (data.ijopExpiredAt is string && data.ijopExpiredAt.size() <= 32)) &&
+        data.totalSantriLatest is number && data.totalSantriLatest >= 0 &&
+        data.totalPendidikLatest is number && data.totalPendidikLatest >= 0 &&
+        isValidId(data.createdByUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPublicPesantren(data) {
+      return data.keys().hasAll([
+          'nama', 'alamat', 'kecamatan', 'desa', 'namaPimpinan', 'tahunBerdiri',
+          'tipe', 'statusKeaktifan', 'lat', 'lng', 'ijopStatusSummary',
+          'totalSantriLatest', 'totalPendidikLatest', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'nama', 'nspp', 'alamat', 'kecamatan', 'desa', 'namaPimpinan', 'tahunBerdiri',
+          'tipe', 'statusKeaktifan', 'lat', 'lng', 'ijopStatusSummary',
+          'totalSantriLatest', 'totalPendidikLatest', 'updatedAt'
+        ]) &&
+        data.nama is string && data.nama.size() >= 3 && data.nama.size() <= 160 &&
+        (!('nspp' in data) || (data.nspp is string && data.nspp.size() <= 32)) &&
+        data.alamat is string && data.alamat.size() >= 5 && data.alamat.size() <= 300 &&
+        data.kecamatan is string && data.kecamatan.size() >= 2 && data.kecamatan.size() <= 80 &&
+        data.desa is string && data.desa.size() >= 2 && data.desa.size() <= 80 &&
+        data.namaPimpinan is string && data.namaPimpinan.size() >= 2 && data.namaPimpinan.size() <= 120 &&
+        data.tahunBerdiri is number && data.tahunBerdiri >= 1800 && data.tahunBerdiri <= 2100 &&
+        data.tipe in ['Salafiyah', 'Khalafiyah/Modern', 'Kombinasi'] &&
+        data.statusKeaktifan == 'aktif' &&
+        data.lat is number && data.lat >= -90 && data.lat <= 90 &&
+        data.lng is number && data.lng >= -180 && data.lng <= 180 &&
+        data.ijopStatusSummary in ['aktif', 'segera_berakhir', 'kedaluwarsa', 'belum_ada'] &&
+        data.totalSantriLatest is number && data.totalSantriLatest >= 0 &&
+        data.totalPendidikLatest is number && data.totalPendidikLatest >= 0 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidLegalitas(data) {
+      return data.keys().hasAll(['pesantrenId', 'nomorIjop', 'tanggalTerbit', 'tanggalBerakhir', 'statusLegalitas', 'updatedByUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['pesantrenId', 'nomorIjop', 'tanggalTerbit', 'tanggalBerakhir', 'statusLegalitas', 'dokumenUrl', 'dokumenNama', 'catatan', 'updatedByUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.pesantrenId) &&
+        data.nomorIjop is string && data.nomorIjop.size() >= 3 && data.nomorIjop.size() <= 80 &&
+        data.tanggalTerbit is string && data.tanggalTerbit.size() >= 8 && data.tanggalTerbit.size() <= 20 &&
+        data.tanggalBerakhir is string && data.tanggalBerakhir.size() >= 8 && data.tanggalBerakhir.size() <= 20 &&
+        data.statusLegalitas in ['aktif', 'segera_berakhir', 'kedaluwarsa', 'proses_perpanjangan'] &&
+        (!('dokumenUrl' in data) || isSafeHttpUrl(data.dokumenUrl)) &&
+        (!('dokumenNama' in data) || (data.dokumenNama is string && data.dokumenNama.size() <= 160)) &&
+        (!('catatan' in data) || (data.catatan is string && data.catatan.size() <= 500)) &&
+        isValidId(data.updatedByUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidLegalitasHistory(data) {
+      return data.keys().hasAll(['pesantrenId', 'nomorIjop', 'tanggalTerbit', 'tanggalBerakhir', 'statusLegalitas', 'changedByUid', 'createdAt']) &&
+        data.keys().hasOnly(['pesantrenId', 'nomorIjop', 'tanggalTerbit', 'tanggalBerakhir', 'statusLegalitas', 'dokumenUrl', 'changedByUid', 'changedByEmail', 'createdAt']) &&
+        isValidId(data.pesantrenId) &&
+        data.nomorIjop is string && data.nomorIjop.size() >= 3 && data.nomorIjop.size() <= 80 &&
+        data.tanggalTerbit is string && data.tanggalTerbit.size() <= 20 &&
+        data.tanggalBerakhir is string && data.tanggalBerakhir.size() <= 20 &&
+        data.statusLegalitas in ['aktif', 'segera_berakhir', 'kedaluwarsa', 'proses_perpanjangan'] &&
+        (!('dokumenUrl' in data) || isSafeHttpUrl(data.dokumenUrl)) &&
+        isValidId(data.changedByUid) &&
+        (!('changedByEmail' in data) || (data.changedByEmail is string && data.changedByEmail.size() <= 160)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidDataPeriodik(data) {
+      return data.keys().hasAll([
+          'pesantrenId', 'tahunAjaran', 'santriLaki', 'santriPerempuan', 'santriMukim', 'santriNonMukim',
+          'santriLokal', 'santriLuarKabupaten', 'ustadzCount', 'ustadzahCount', 'pendidikS1KeAtas',
+          'pendidikTetap', 'pendidikTidakTetap', 'luasTanahM2', 'luasBangunanM2', 'jumlahAsrama',
+          'jumlahRuangBelajar', 'jumlahMushola', 'jumlahToilet', 'statusTanah', 'kelayakanBangunan',
+          'updatedByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'pesantrenId', 'tahunAjaran', 'santriLaki', 'santriPerempuan', 'santriMukim', 'santriNonMukim',
+          'santriLokal', 'santriLuarKabupaten', 'ustadzCount', 'ustadzahCount', 'pendidikS1KeAtas',
+          'pendidikTetap', 'pendidikTidakTetap', 'luasTanahM2', 'luasBangunanM2', 'jumlahAsrama',
+          'jumlahRuangBelajar', 'jumlahMushola', 'jumlahToilet', 'statusTanah', 'kelayakanBangunan',
+          'updatedByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.pesantrenId) &&
+        data.tahunAjaran is string && data.tahunAjaran.size() >= 4 && data.tahunAjaran.size() <= 32 &&
+        data.santriLaki is number && data.santriLaki >= 0 &&
+        data.santriPerempuan is number && data.santriPerempuan >= 0 &&
+        data.santriMukim is number && data.santriMukim >= 0 &&
+        data.santriNonMukim is number && data.santriNonMukim >= 0 &&
+        data.santriLokal is number && data.santriLokal >= 0 &&
+        data.santriLuarKabupaten is number && data.santriLuarKabupaten >= 0 &&
+        data.ustadzCount is number && data.ustadzCount >= 0 &&
+        data.ustadzahCount is number && data.ustadzahCount >= 0 &&
+        data.pendidikS1KeAtas is number && data.pendidikS1KeAtas >= 0 &&
+        data.pendidikTetap is number && data.pendidikTetap >= 0 &&
+        data.pendidikTidakTetap is number && data.pendidikTidakTetap >= 0 &&
+        data.luasTanahM2 is number && data.luasTanahM2 >= 0 &&
+        data.luasBangunanM2 is number && data.luasBangunanM2 >= 0 &&
+        data.jumlahAsrama is number && data.jumlahAsrama >= 0 &&
+        data.jumlahRuangBelajar is number && data.jumlahRuangBelajar >= 0 &&
+        data.jumlahMushola is number && data.jumlahMushola >= 0 &&
+        data.jumlahToilet is number && data.jumlahToilet >= 0 &&
+        data.statusTanah in ['Wakaf', 'Milik Yayasan', 'Sewa/Pinjam', 'Lainnya'] &&
+        data.kelayakanBangunan in ['Layak', 'Perlu Perbaikan Ringan', 'Perlu Renovasi Berat'] &&
+        isValidId(data.updatedByUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidVerifikasiLog(data) {
+      return data.keys().hasAll(['pesantrenId', 'pesantrenNama', 'fromStatus', 'toStatus', 'actorUid', 'actorRole', 'createdAt']) &&
+        data.keys().hasOnly(['pesantrenId', 'pesantrenNama', 'fromStatus', 'toStatus', 'catatanRevisi', 'actorUid', 'actorEmail', 'actorRole', 'createdAt']) &&
+        isValidId(data.pesantrenId) &&
+        data.pesantrenNama is string && data.pesantrenNama.size() >= 1 && data.pesantrenNama.size() <= 160 &&
+        data.fromStatus in ['draft', 'diajukan', 'diverifikasi', 'disetujui', 'ditolak'] &&
+        data.toStatus in ['draft', 'diajukan', 'diverifikasi', 'disetujui', 'ditolak'] &&
+        (!('catatanRevisi' in data) || (data.catatanRevisi is string && data.catatanRevisi.size() <= 1000)) &&
+        isValidId(data.actorUid) &&
+        (!('actorEmail' in data) || (data.actorEmail is string && data.actorEmail.size() <= 160)) &&
+        data.actorRole in ['super_admin', 'operator'] &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['actorUid', 'actorEmail', 'actorRole', 'action', 'targetType', 'targetId', 'summary', 'createdAt']) &&
+        data.keys().hasOnly(['actorUid', 'actorEmail', 'actorRole', 'action', 'targetType', 'targetId', 'summary', 'createdAt']) &&
+        isValidId(data.actorUid) &&
+        data.actorEmail is string && data.actorEmail.size() <= 160 &&
+        data.actorRole in ['super_admin', 'operator'] &&
+        data.action is string && data.action.size() >= 2 && data.action.size() <= 80 &&
+        data.targetType is string && data.targetType.size() >= 2 && data.targetType.size() <= 60 &&
+        isValidId(data.targetId) &&
+        data.summary is string && data.summary.size() >= 2 && data.summary.size() <= 500 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSystemConfig(data) {
+      return data.keys().hasAll([
+          'kabupatenNama', 'activePeriode', 'allowMultiOperatorPerPesantren',
+          'allowMultiPesantrenPerOperator', 'allowPostApprovalEdit',
+          'publicDirectoryEnabled', 'updatedByUid', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'kabupatenNama', 'activePeriode', 'allowMultiOperatorPerPesantren',
+          'allowMultiPesantrenPerOperator', 'allowPostApprovalEdit',
+          'publicDirectoryEnabled', 'updatedByUid', 'updatedAt'
+        ]) &&
+        data.kabupatenNama is string && data.kabupatenNama.size() >= 2 && data.kabupatenNama.size() <= 120 &&
+        data.activePeriode is string && data.activePeriode.size() >= 4 && data.activePeriode.size() <= 32 &&
+        data.allowMultiOperatorPerPesantren is bool &&
+        data.allowMultiPesantrenPerOperator is bool &&
+        data.allowPostApprovalEdit is bool &&
+        data.publicDirectoryEnabled is bool &&
+        isValidId(data.updatedByUid) &&
+        data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && (isBootstrapAdmin() || (isVerified() && request.auth.uid == uid));
+      allow list: if isBootstrapAdmin();
+      allow create: if isValidId(uid) && isBootstrapAdmin() &&
+        isValidAdminUser(incoming()) && incoming().uid == uid && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /users/{uid} {
+      allow get: if isValidId(uid) && (isAdmin() || (isVerified() && request.auth.uid == uid));
+      allow list: if isAdmin();
+      allow create: if isValidId(uid) && isVerified() &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          (isAdmin() && incoming().role in ['super_admin', 'operator']) ||
+          (
+            request.auth.uid == uid &&
+            incoming().role == 'super_admin' &&
+            isBootstrapAdmin()
+          ) ||
+          (
+            request.auth.uid == uid &&
+            incoming().role == 'operator' &&
+            incoming().isActive == true &&
+            'inviteId' in incoming() &&
+            exists(/databases/$(database)/documents/operator_invites/$(incoming().inviteId)) &&
+            get(/databases/$(database)/documents/operator_invites/$(incoming().inviteId)).data.email == request.auth.token.email &&
+            get(/databases/$(database)/documents/operator_invites/$(incoming().inviteId)).data.isActive == true
+          )
+        );
+      allow update: if isValidId(uid) && isVerified() &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (
+            request.auth.uid == uid &&
+            incoming().role == existing().role &&
+            incoming().isActive == existing().isActive &&
+            incoming().email == existing().email &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /operator_invites/{inviteId} {
+      allow get: if isValidId(inviteId) && (isAdmin() || (isVerified() && existing().email == request.auth.token.email));
+      allow list: if isVerified() && (isAdmin() || existing().email == request.auth.token.email);
+      allow create: if isValidId(inviteId) && isAdmin() &&
+        isValidOperatorInvite(incoming()) &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(inviteId) && isVerified() &&
+        isValidOperatorInvite(incoming()) &&
+        incoming().createdByUid == existing().createdByUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (
+            existing().email == request.auth.token.email &&
+            existing().isActive == true &&
+            (!('linkedUid' in existing()) || existing().linkedUid == '') &&
+            incoming().linkedUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['linkedUid', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(inviteId) && isAdmin();
+    }
+
+    match /operator_assignments/{assignmentId} {
+      allow get: if isValidId(assignmentId) && (isAdmin() || (isVerified() && existing().operatorEmail == request.auth.token.email));
+      allow list: if isVerified() && (isAdmin() || existing().operatorEmail == request.auth.token.email);
+      allow create: if isValidId(assignmentId) && isAdmin() &&
+        isValidOperatorAssignment(incoming()) &&
+        exists(/databases/$(database)/documents/pesantren/$(incoming().pesantrenId)) &&
+        incoming().assignedByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(assignmentId) && isAdmin() &&
+        isValidOperatorAssignment(incoming()) &&
+        incoming().pesantrenId == existing().pesantrenId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /pesantren/{pesantrenId} {
+      allow get: if isValidId(pesantrenId) && (
+        isAdmin() ||
+        (isActiveUser() && (
+          request.auth.uid in existing().assignedOperatorUids ||
+          request.auth.token.email in existing().assignedOperatorEmails
+        ))
+      );
+      allow list: if isVerified() && (
+        isAdmin() ||
+        request.auth.uid in existing().assignedOperatorUids ||
+        request.auth.token.email in existing().assignedOperatorEmails
+      );
+      allow create: if isValidId(pesantrenId) && isAdmin() &&
+        isValidPesantren(incoming()) &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(pesantrenId) && isVerified() &&
+        isValidPesantren(incoming()) &&
+        incoming().createdByUid == existing().createdByUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          // Action 1: Claim operator UID on first verified sign-in
+          (
+            isActiveUser() &&
+            request.auth.token.email in existing().assignedOperatorEmails &&
+            !(request.auth.uid in existing().assignedOperatorUids) &&
+            request.auth.uid in incoming().assignedOperatorUids &&
+            incoming().assignedOperatorUids.size() == existing().assignedOperatorUids.size() + 1 &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['assignedOperatorUids', 'updatedAt'])
+          ) ||
+          // Action 2: Assigned operator updates profile fields while draft/ditolak
+          (
+            isActiveUser() &&
+            request.auth.uid in existing().assignedOperatorUids &&
+            existing().verificationStatus in ['draft', 'ditolak'] &&
+            incoming().verificationStatus == existing().verificationStatus &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'nama', 'nspp', 'alamat', 'kecamatan', 'desa', 'telepon', 'email',
+              'namaPimpinan', 'tahunBerdiri', 'tipe', 'statusKeaktifan', 'lat', 'lng',
+              'ijopStatusSummary', 'ijopExpiredAt', 'totalSantriLatest', 'totalPendidikLatest', 'updatedAt'
+            ])
+          ) ||
+          // Action 3: Assigned operator submits draft -> diajukan (with atomic verifikasi log)
+          (
+            isActiveUser() &&
+            request.auth.uid in existing().assignedOperatorUids &&
+            existing().verificationStatus in ['draft', 'ditolak'] &&
+            incoming().verificationStatus == 'diajukan' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['verificationStatus', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(pesantrenId) && isAdmin();
+    }
+
+    match /public_pesantren/{pesantrenId} {
+      allow get: if isValidId(pesantrenId);
+      allow list: if existing().statusKeaktifan == 'aktif';
+      allow create, update: if isValidId(pesantrenId) && isAdmin() &&
+        isValidPublicPesantren(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(pesantrenId) && isAdmin();
+    }
+
+    match /legalitas/{pesantrenId} {
+      allow get: if isValidId(pesantrenId) && (isAdmin() || isAssignedToPesantren(pesantrenId));
+      allow list: if isAdmin();
+      allow create: if isValidId(pesantrenId) && isVerified() &&
+        isValidLegalitas(incoming()) &&
+        incoming().pesantrenId == pesantrenId &&
+        incoming().updatedByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isAssignedToPesantren(pesantrenId));
+      allow update: if isValidId(pesantrenId) && isVerified() &&
+        isValidLegalitas(incoming()) &&
+        incoming().pesantrenId == existing().pesantrenId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedByUid == request.auth.uid &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (
+            isAssignedToPesantren(pesantrenId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'nomorIjop', 'tanggalTerbit', 'tanggalBerakhir', 'statusLegalitas',
+              'dokumenUrl', 'dokumenNama', 'catatan', 'updatedByUid', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(pesantrenId) && isAdmin();
+    }
+
+    match /legalitas_history/{historyId} {
+      allow get: if isValidId(historyId) && (isAdmin() || isAssignedToPesantren(existing().pesantrenId));
+      allow list: if isVerified() && (isAdmin() || existing().changedByUid == request.auth.uid);
+      allow create: if isValidId(historyId) && isVerified() &&
+        isValidLegalitasHistory(incoming()) &&
+        incoming().changedByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        (isAdmin() || isAssignedToPesantren(incoming().pesantrenId));
+      allow update, delete: if false;
+    }
+
+    match /data_periodik/{periodDocId} {
+      allow get: if isValidId(periodDocId) && (isAdmin() || (isActiveUser() && (resource == null || isAssignedToPesantren(existing().pesantrenId))));
+      allow list: if isVerified() && (isAdmin() || existing().updatedByUid == request.auth.uid);
+      allow create: if isValidId(periodDocId) && isVerified() &&
+        isValidDataPeriodik(incoming()) &&
+        incoming().updatedByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isAssignedToPesantren(incoming().pesantrenId));
+      allow update: if isValidId(periodDocId) && isVerified() &&
+        isValidDataPeriodik(incoming()) &&
+        incoming().pesantrenId == existing().pesantrenId &&
+        incoming().tahunAjaran == existing().tahunAjaran &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedByUid == request.auth.uid &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (
+            isAssignedToPesantren(existing().pesantrenId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'santriLaki', 'santriPerempuan', 'santriMukim', 'santriNonMukim',
+              'santriLokal', 'santriLuarKabupaten', 'ustadzCount', 'ustadzahCount',
+              'pendidikS1KeAtas', 'pendidikTetap', 'pendidikTidakTetap',
+              'luasTanahM2', 'luasBangunanM2', 'jumlahAsrama', 'jumlahRuangBelajar',
+              'jumlahMushola', 'jumlahToilet', 'statusTanah', 'kelayakanBangunan',
+              'updatedByUid', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(periodDocId) && isAdmin();
+    }
+
+    match /verifikasi_logs/{logId} {
+      allow get: if isValidId(logId) && (isAdmin() || isAssignedToPesantren(existing().pesantrenId));
+      allow list: if isVerified() && (isAdmin() || existing().actorUid == request.auth.uid);
+      allow create: if isValidId(logId) && isVerified() &&
+        isValidVerifikasiLog(incoming()) &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().createdAt == request.time && (
+          (isAdmin() && incoming().actorRole == 'super_admin') ||
+          (
+            isAssignedToPesantren(incoming().pesantrenId) &&
+            incoming().actorRole == 'operator' &&
+            incoming().toStatus == 'diajukan'
+          )
+        );
+      allow update, delete: if false;
+    }
+
+    match /audit_logs/{auditId} {
+      allow get: if isValidId(auditId) && (isAdmin() || (isVerified() && existing().actorUid == request.auth.uid));
+      allow list: if isVerified() && (isAdmin() || existing().actorUid == request.auth.uid);
+      allow create: if isValidId(auditId) && isVerified() &&
+        isValidAuditLog(incoming()) &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().createdAt == request.time && (
+          (isAdmin() && incoming().actorRole == 'super_admin') ||
+          (isActiveUser() && incoming().actorRole == 'operator')
+        );
+      allow update, delete: if false;
+    }
+
+    match /system_config/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if false;
+      allow create, update: if isValidId(configId) && isAdmin() &&
+        isValidSystemConfig(incoming()) &&
+        incoming().updatedByUid == request.auth.uid &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+  }
+}

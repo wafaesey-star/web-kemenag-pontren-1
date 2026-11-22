@@ -1,0 +1,306 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Marker document identifying a verified Kemenag Kabupaten Super Admin UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated portal user record with RBAC role and active status.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["super_admin", "operator"] },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "isActive", "createdAt", "updatedAt"]
+    },
+    "OperatorInvite": {
+      "title": "OperatorInvite",
+      "description": "Kemenag-managed operator account allowlist keyed by normalized email.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "isActive": { "type": "boolean" },
+        "assignedPesantrenIds": { "type": "array" },
+        "linkedUid": { "type": "string", "maxLength": 128 },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "fullName", "isActive", "assignedPesantrenIds", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "OperatorAssignment": {
+      "title": "OperatorAssignment",
+      "description": "Append-friendly assignment link and audit record between an operator and a pesantren.",
+      "type": "object",
+      "properties": {
+        "pesantrenId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "pesantrenNama": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "operatorEmail": { "type": "string", "format": "email", "maxLength": 160 },
+        "operatorUid": { "type": "string", "maxLength": 128 },
+        "operatorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["aktif", "nonaktif"] },
+        "assignedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["pesantrenId", "pesantrenNama", "operatorEmail", "operatorName", "status", "assignedByUid", "createdAt", "updatedAt"]
+    },
+    "Pesantren": {
+      "title": "Pesantren",
+      "description": "Internal master profile and verification workflow state of a pondok pesantren.",
+      "type": "object",
+      "properties": {
+        "nama": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "nspp": { "type": "string", "maxLength": 32 },
+        "alamat": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "kecamatan": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "desa": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "telepon": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 160 },
+        "namaPimpinan": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "tahunBerdiri": { "type": "number" },
+        "tipe": { "type": "string", "enum": ["Salafiyah", "Khalafiyah/Modern", "Kombinasi"] },
+        "statusKeaktifan": { "type": "string", "enum": ["aktif", "nonaktif"] },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "verificationStatus": { "type": "string", "enum": ["draft", "diajukan", "diverifikasi", "disetujui", "ditolak"] },
+        "catatanRevisi": { "type": "string", "maxLength": 1000 },
+        "assignedOperatorUids": { "type": "array" },
+        "assignedOperatorEmails": { "type": "array" },
+        "ijopStatusSummary": { "type": "string", "enum": ["aktif", "segera_berakhir", "kedaluwarsa", "belum_ada"] },
+        "ijopExpiredAt": { "type": "string", "maxLength": 32 },
+        "totalSantriLatest": { "type": "number" },
+        "totalPendidikLatest": { "type": "number" },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "nama", "alamat", "kecamatan", "desa", "namaPimpinan", "tahunBerdiri",
+        "tipe", "statusKeaktifan", "lat", "lng", "verificationStatus",
+        "assignedOperatorUids", "assignedOperatorEmails", "ijopStatusSummary",
+        "totalSantriLatest", "totalPendidikLatest", "createdByUid", "createdAt", "updatedAt"
+      ]
+    },
+    "PublicPesantren": {
+      "title": "PublicPesantren",
+      "description": "Sanitized public projection of approved and active pesantren for directory and map.",
+      "type": "object",
+      "properties": {
+        "nama": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "nspp": { "type": "string", "maxLength": 32 },
+        "alamat": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "kecamatan": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "desa": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "namaPimpinan": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "tahunBerdiri": { "type": "number" },
+        "tipe": { "type": "string", "enum": ["Salafiyah", "Khalafiyah/Modern", "Kombinasi"] },
+        "statusKeaktifan": { "type": "string", "enum": ["aktif", "nonaktif"] },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "ijopStatusSummary": { "type": "string", "enum": ["aktif", "segera_berakhir", "kedaluwarsa", "belum_ada"] },
+        "totalSantriLatest": { "type": "number" },
+        "totalPendidikLatest": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "nama", "alamat", "kecamatan", "desa", "namaPimpinan", "tahunBerdiri",
+        "tipe", "statusKeaktifan", "lat", "lng", "ijopStatusSummary",
+        "totalSantriLatest", "totalPendidikLatest", "updatedAt"
+      ]
+    },
+    "Legalitas": {
+      "title": "Legalitas",
+      "description": "Sensitive IJOP legality record for a pesantren, restricted to Kemenag and assigned operators.",
+      "type": "object",
+      "properties": {
+        "pesantrenId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nomorIjop": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "tanggalTerbit": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "tanggalBerakhir": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "statusLegalitas": { "type": "string", "enum": ["aktif", "segera_berakhir", "kedaluwarsa", "proses_perpanjangan"] },
+        "dokumenUrl": { "type": "string", "maxLength": 500 },
+        "dokumenNama": { "type": "string", "maxLength": 160 },
+        "catatan": { "type": "string", "maxLength": 500 },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["pesantrenId", "nomorIjop", "tanggalTerbit", "tanggalBerakhir", "statusLegalitas", "updatedByUid", "createdAt", "updatedAt"]
+    },
+    "LegalitasHistory": {
+      "title": "LegalitasHistory",
+      "description": "Append-only historical record of IJOP legality changes.",
+      "type": "object",
+      "properties": {
+        "pesantrenId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nomorIjop": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "tanggalTerbit": { "type": "string", "maxLength": 20 },
+        "tanggalBerakhir": { "type": "string", "maxLength": 20 },
+        "statusLegalitas": { "type": "string", "enum": ["aktif", "segera_berakhir", "kedaluwarsa", "proses_perpanjangan"] },
+        "dokumenUrl": { "type": "string", "maxLength": 500 },
+        "changedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "changedByEmail": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["pesantrenId", "nomorIjop", "tanggalTerbit", "tanggalBerakhir", "statusLegalitas", "changedByUid", "createdAt"]
+    },
+    "DataPeriodik": {
+      "title": "DataPeriodik",
+      "description": "Periodic quantitative data (santri, tenaga pendidik, sarpras) keyed by pesantrenId and academic period.",
+      "type": "object",
+      "properties": {
+        "pesantrenId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tahunAjaran": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "santriLaki": { "type": "number" },
+        "santriPerempuan": { "type": "number" },
+        "santriMukim": { "type": "number" },
+        "santriNonMukim": { "type": "number" },
+        "santriLokal": { "type": "number" },
+        "santriLuarKabupaten": { "type": "number" },
+        "ustadzCount": { "type": "number" },
+        "ustadzahCount": { "type": "number" },
+        "pendidikS1KeAtas": { "type": "number" },
+        "pendidikTetap": { "type": "number" },
+        "pendidikTidakTetap": { "type": "number" },
+        "luasTanahM2": { "type": "number" },
+        "luasBangunanM2": { "type": "number" },
+        "jumlahAsrama": { "type": "number" },
+        "jumlahRuangBelajar": { "type": "number" },
+        "jumlahMushola": { "type": "number" },
+        "jumlahToilet": { "type": "number" },
+        "statusTanah": { "type": "string", "enum": ["Wakaf", "Milik Yayasan", "Sewa/Pinjam", "Lainnya"] },
+        "kelayakanBangunan": { "type": "string", "enum": ["Layak", "Perlu Perbaikan Ringan", "Perlu Renovasi Berat"] },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "pesantrenId", "tahunAjaran", "santriLaki", "santriPerempuan", "santriMukim", "santriNonMukim",
+        "santriLokal", "santriLuarKabupaten", "ustadzCount", "ustadzahCount", "pendidikS1KeAtas",
+        "pendidikTetap", "pendidikTidakTetap", "luasTanahM2", "luasBangunanM2", "jumlahAsrama",
+        "jumlahRuangBelajar", "jumlahMushola", "jumlahToilet", "statusTanah", "kelayakanBangunan",
+        "updatedByUid", "createdAt", "updatedAt"
+      ]
+    },
+    "VerifikasiLog": {
+      "title": "VerifikasiLog",
+      "description": "Append-only verification workflow transition record.",
+      "type": "object",
+      "properties": {
+        "pesantrenId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "pesantrenNama": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "fromStatus": { "type": "string", "enum": ["draft", "diajukan", "diverifikasi", "disetujui", "ditolak"] },
+        "toStatus": { "type": "string", "enum": ["draft", "diajukan", "diverifikasi", "disetujui", "ditolak"] },
+        "catatanRevisi": { "type": "string", "maxLength": 1000 },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "actorRole": { "type": "string", "enum": ["super_admin", "operator"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["pesantrenId", "pesantrenNama", "fromStatus", "toStatus", "actorUid", "actorRole", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Append-only audit trail for sensitive data changes and operator assignments.",
+      "type": "object",
+      "properties": {
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "actorRole": { "type": "string", "enum": ["super_admin", "operator"] },
+        "action": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "targetType": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "summary": { "type": "string", "minLength": 2, "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "actorEmail", "actorRole", "action", "targetType", "targetId", "summary", "createdAt"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Configurable assumptions for open PRD questions managed by Kemenag Super Admin.",
+      "type": "object",
+      "properties": {
+        "kabupatenNama": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "activePeriode": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "allowMultiOperatorPerPesantren": { "type": "boolean" },
+        "allowMultiPesantrenPerOperator": { "type": "boolean" },
+        "allowPostApprovalEdit": { "type": "boolean" },
+        "publicDirectoryEnabled": { "type": "boolean" },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "kabupatenNama", "activePeriode", "allowMultiOperatorPerPesantren",
+        "allowMultiPesantrenPerOperator", "allowPostApprovalEdit",
+        "publicDirectoryEnabled", "updatedByUid", "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Verified Kemenag Super Admin accounts."
+    },
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles storing RBAC role and active state."
+    },
+    "/operator_invites/{emailKey}": {
+      "schema": { "$ref": "#/entities/OperatorInvite" },
+      "description": "Pre-registered operator allowlist managed by Kemenag."
+    },
+    "/operator_assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/OperatorAssignment" },
+      "description": "Assignment history and active status linking operators to pesantren."
+    },
+    "/pesantren/{pesantrenId}": {
+      "schema": { "$ref": "#/entities/Pesantren" },
+      "description": "Master internal pesantren records and workflow state."
+    },
+    "/public_pesantren/{pesantrenId}": {
+      "schema": { "$ref": "#/entities/PublicPesantren" },
+      "description": "Sanitized public projection of approved and active pesantren."
+    },
+    "/legalitas/{pesantrenId}": {
+      "schema": { "$ref": "#/entities/Legalitas" },
+      "description": "Current IJOP legality record per pesantren (sensitive)."
+    },
+    "/legalitas_history/{historyId}": {
+      "schema": { "$ref": "#/entities/LegalitasHistory" },
+      "description": "Append-only IJOP legality change history."
+    },
+    "/data_periodik/{periodDocId}": {
+      "schema": { "$ref": "#/entities/DataPeriodik" },
+      "description": "Periodic santri, educator, and sarpras statistics per pesantren and academic year."
+    },
+    "/verifikasi_logs/{logId}": {
+      "schema": { "$ref": "#/entities/VerifikasiLog" },
+      "description": "Append-only verification status transition logs."
+    },
+    "/audit_logs/{auditId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Append-only audit trail for critical data and assignment mutations."
+    },
+    "/system_config/{configId}": {
+      "schema": { "$ref": "#/entities/SystemConfig" },
+      "description": "Configurable Kemenag system assumptions and active academic period."
+    }
+  }
+}

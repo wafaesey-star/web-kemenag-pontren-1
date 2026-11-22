@@ -1,0 +1,6 @@
+{
+  "name": "Ponytail Skills",
+  "description": "Repository configured with Ponytail lazy senior dev mode rules and skills (full mode).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

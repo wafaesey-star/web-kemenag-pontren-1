@@ -1,0 +1,101 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@layer base {
+  :root {
+    --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+    --font-sans: "DM Sans", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --bg-canvas: #F8FAF9;
+    --bg-surface: #FFFFFF;
+    --bg-subtle: #F1F5F3;
+    --border-hairline: rgba(15, 23, 42, 0.08);
+    --text-primary: #111815;
+    --text-secondary: #4B5751;
+    --text-muted: #6A7770;
+    --accent-kemenag: #0F5132;
+    --accent-kemenag-hover: #0B3D26;
+    --accent-brass: #B45309;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  .font-mono-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Modern Web Guidance: prevent page scroll chaining under modal <dialog> */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background-color: rgba(17, 24, 21, 0.45);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Modern Web Guidance: validate input only after interaction (:user-invalid) */
+.field-input:is(:user-invalid, .user-invalid-fallback) {
+  border-color: #B91C1C;
+  background-color: #FEF2F2;
+}
+
+.field-error {
+  display: none;
+}
+
+.field-input:is(:user-invalid, .user-invalid-fallback) + .field-error {
+  display: block;
+}
+
+/* Responsive table wrapper with container queries */
+.table-region {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  container-type: inline-size;
+}
+
+.table-region table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+/* Visually hidden live announcer */
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print optimization for Kemenag PDF/Print view */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
